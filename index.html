@@ -2,54 +2,57 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>心情溫度計 - 每日覺察日誌</title>
+    <title>雲端同步心情溫度計</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
-        :root {
-            --primary: #4a90e2;
-            --bg: #f4f7f9;
-            --card-bg: #ffffff;
-            --text: #333;
-        }
-        body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: var(--bg); color: var(--text); padding: 20px; line-height: 1.6; }
+        :root { --primary: #4a90e2; --bg: #f4f7f9; }
+        body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; background: var(--bg); padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; }
-        h2 { border-left: 5px solid var(--primary); padding-left: 15px; margin-bottom: 20px; color: #2c3e50; }
-        
-        canvas { border: 1px solid #eee; border-radius: 12px; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 100%; height: auto; cursor: crosshair; }
-        select { padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; font-size: 16px; margin-bottom: 15px; background: white; }
-        
-        .card { background: var(--card-bg); padding: 25px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 30px; }
-
-        /* 筆記區優化 */
-        .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 20px; }
-        .note-box { background: #fafafa; border: 1px solid #eee; border-radius: 12px; padding: 15px; transition: 0.3s; }
-        .note-box:hover { box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .note-box span { font-weight: bold; display: block; margin-bottom: 8px; color: var(--primary); }
-        .note-box textarea { width: 100%; height: 120px; resize: none; border-radius: 8px; border: 1px solid #ddd; padding: 10px; box-sizing: border-box; font-size: 14px; }
-        
-        .btn-clear { margin-top: 5px; font-size: 12px; color: #999; cursor: pointer; border: none; background: none; text-decoration: underline; }
-        .hint { font-size: 13px; color: #666; margin-bottom: 10px; }
+        .card { background: #fff; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h2 { color: #2c3e50; border-left: 5px solid var(--primary); padding-left: 15px; }
+        canvas { width: 100%; background: #fff; border-radius: 8px; cursor: crosshair; border: 1px solid #eee; }
+        select { padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px; font-size: 16px; }
+        .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-top: 20px; }
+        .note-box { background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #eee; }
+        .note-box span { font-weight: bold; display: block; margin-bottom: 5px; color: var(--primary); }
+        textarea { width: 100%; height: 100px; border-radius: 8px; border: 1px solid #ddd; padding: 10px; box-sizing: border-box; resize: none; }
+        .status { font-size: 13px; color: #27ae60; margin-bottom: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="card">
-        <h2>日版心情折線圖</h2>
-        <p class="hint">💡 點擊圖表中的垂直線位置來紀錄心情分數 (+10 到 -10)</p>
+        <h2>雲端同步心情溫度計</h2>
+        <div id="syncStatus" class="status">● 雲端連線中...</div>
         <select id="dateSelect"></select>
         <canvas id="dayChart" width="800" height="320"></canvas>
     </div>
-
     <div class="card">
-        <h2>週版心情趨勢 (21天)</h2>
+        <h2>週趨勢與覺察筆記</h2>
         <canvas id="weekChart" width="1400" height="320"></canvas>
-
-        <h3 style="margin-top:40px; color: #2c3e50;">每日覺察紀錄 (自動儲存)</h3>
         <div id="notes" class="notes-grid"></div>
     </div>
 </div>
 
 <script>
+// --- 你的 Firebase 設定 ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBj3pvp-UrqNuFFqWQPD5OVoieuJI5DeoE",
+  authDomain: "mood-81873.firebaseapp.com",
+  databaseURL: "https://mood-81873-default-rtdb.firebaseio.com", // 根據 ID 自動補齊的資料庫網址
+  projectId: "mood-81873",
+  storageBucket: "mood-81873.firebasestorage.app",
+  messagingSenderId: "888330529357",
+  appId: "1:888330529357:web:46058d2f5298126e4c0a04",
+  measurementId: "G-JBSLK9DLWL"
+};
+
+// 初始化 Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
 const times = ["9","11","13","15","17","19","21","23"];
 const dates = [
     "3/30 (一)","3/31 (二)","4/01 (三)","4/02 (四)","4/03 (五)","4/04 (六)","4/05 (日)",
@@ -57,76 +60,76 @@ const dates = [
     "4/13 (一)","4/14 (二)","4/15 (三)","4/16 (四)","4/17 (五)","4/18 (六)","4/19 (日)"
 ];
 
-// 初始化資料：嘗試從瀏覽器提取舊資料
-let allData = JSON.parse(localStorage.getItem('moodTracker_allData')) || {};
-let noteData = JSON.parse(localStorage.getItem('moodTracker_notes')) || {};
-let weekData = {};
-
+let allData = {}, noteData = {}, weekData = {};
 const ds = document.getElementById("dateSelect");
 const notesDiv = document.getElementById("notes");
 
-// 建立下拉選單與筆記區
+// 初始化介面
 dates.forEach(d => {
-    // 下拉選單
     let o = document.createElement("option");
-    o.text = d;
-    ds.add(o);
-    if(!allData[d]) allData[d] = {};
+    o.text = d; ds.add(o);
+    allData[d] = {};
 
-    // 筆記區
     let box = document.createElement("div");
     box.className = "note-box";
-    box.innerHTML = `
-        <span>${d}</span>
-        <textarea id="note-${d}" placeholder="今天發生了什麼事？心情如何？">${noteData[d] || ""}</textarea>
-        <button class="btn-clear" onclick="clearNote('${d}')">清空筆記</button>
-    `;
+    box.innerHTML = `<span>${d}</span><textarea id="note-${d}" placeholder="今天的觀察..." oninput="saveNote('${d}', this.value)"></textarea>`;
     notesDiv.appendChild(box);
-
-    // 綁定儲存事件
-    box.querySelector('textarea').addEventListener('input', (e) => {
-        noteData[d] = e.target.value;
-        saveToLocal();
-    });
 });
 
-function saveToLocal() {
-    localStorage.setItem('moodTracker_allData', JSON.stringify(allData));
-    localStorage.setItem('moodTracker_notes', JSON.stringify(noteData));
+// 從 Firebase 監聽資料即時同步
+db.ref('moodData').on('value', (snapshot) => {
+    const data = snapshot.val();
+    if(data) {
+        allData = data.scores || allData;
+        noteData = data.notes || {};
+        dates.forEach(d => {
+            const el = document.getElementById(`note-${d}`);
+            if(noteData[d] !== undefined && el !== document.activeElement) {
+                el.value = noteData[d];
+            }
+        });
+        refresh();
+        document.getElementById("syncStatus").innerText = "● 雲端已同步 (實時)";
+    }
+});
+
+function saveScore(date, time, val) {
+    db.ref('moodData/scores/' + date + '/' + time).set(val);
 }
 
-function clearNote(date) {
-    if(confirm(`確定要清空 ${date} 的筆記嗎？`)) {
-        document.getElementById(`note-${date}`).value = "";
-        noteData[date] = "";
-        saveToLocal();
-    }
+function saveNote(date, text) {
+    db.ref('moodData/notes/' + date).set(text);
+}
+
+function updateWeekData() {
+    dates.forEach(d => {
+        let dayScores = allData[d];
+        if(dayScores) {
+            let vals = Object.values(dayScores);
+            if(vals.length > 0) {
+                weekData[d] = vals.reduce((a, b) => a + b) / vals.length;
+            } else { delete weekData[d]; }
+        }
+    });
+}
+
+function refresh() {
+    drawChart("dayChart", allData[ds.value] || {}, times, 90, false);
+    updateWeekData();
+    drawChart("weekChart", weekData, dates, 60, true);
 }
 
 function drawAxes(ctx, w, h, xGap, labels, type) {
     ctx.strokeStyle = "#e0e0e0";
     ctx.lineWidth = 1;
-    
-    // 橫向參考線
     for(let i = -10; i <= 10; i += 5) {
         let y = h/2 - i*10;
-        ctx.beginPath();
-        ctx.moveTo(50, y);
-        ctx.lineTo(w-10, y);
-        ctx.stroke();
-        ctx.fillStyle = "#999";
-        ctx.font = "12px Arial";
+        ctx.beginPath(); ctx.moveTo(50, y); ctx.lineTo(w-10, y); ctx.stroke();
+        ctx.fillStyle = "#999"; ctx.font = "12px Arial";
         ctx.fillText(i, 15, y+5);
     }
-
-    // Y 軸主線
     ctx.strokeStyle = "#333";
-    ctx.beginPath();
-    ctx.moveTo(50, 10);
-    ctx.lineTo(50, h-30);
-    ctx.stroke();
-
-    // X 軸標籤
+    ctx.beginPath(); ctx.moveTo(50, 10); ctx.lineTo(50, h-30); ctx.stroke();
     ctx.fillStyle = "#666";
     labels.forEach((l, i) => {
         let x = 70 + i * xGap;
@@ -134,14 +137,14 @@ function drawAxes(ctx, w, h, xGap, labels, type) {
     });
 }
 
-function drawChart(canvasId, dataObj, labels, xGap, isWeek) {
-    let c = document.getElementById(canvasId), ctx = c.getContext("2d");
-    ctx.clearRect(0, 0, c.width, c.height);
+function drawChart(id, data, labels, xGap, isWeek) {
+    let c = document.getElementById(id), ctx = c.getContext("2d");
+    ctx.clearRect(0,0,c.width,c.height);
     drawAxes(ctx, c.width, c.height, xGap, labels, isWeek ? 'week' : 'day');
 
     let points = [];
     labels.forEach((l, i) => {
-        let v = isWeek ? dataObj[l] : dataObj[l];
+        let v = data[l];
         if (v !== undefined) {
             points.push({ x: 70 + i * xGap, y: 160 - v * 10 });
         }
@@ -157,55 +160,28 @@ function drawChart(canvasId, dataObj, labels, xGap, isWeek) {
         });
         ctx.stroke();
 
-        // 畫點
         points.forEach(p => {
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = "white";
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = "white"; ctx.fill();
             ctx.strokeStyle = isWeek ? "#ff9f43" : "#4a90e2";
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            ctx.lineWidth = 2; ctx.stroke();
         });
     }
 }
 
-function updateWeekData() {
-    dates.forEach(d => {
-        let vals = Object.values(allData[d]);
-        if(vals.length > 0) {
-            weekData[d] = vals.reduce((a, b) => a + b) / vals.length;
-        } else {
-            delete weekData[d];
-        }
-    });
-}
-
-function refresh() {
-    drawChart("dayChart", allData[ds.value], times, 90, false);
-    updateWeekData();
-    drawChart("weekChart", weekData, dates, 60, true);
-}
-
-// 點擊互動
 document.getElementById("dayChart").addEventListener("click", e => {
     let r = e.target.getBoundingClientRect();
     let x = (e.clientX - r.left) * (e.target.width / r.width);
     let y = (e.clientY - r.top) * (e.target.height / r.height);
-
     let i = Math.round((x - 70) / 90);
     if (i >= 0 && i < times.length) {
         let val = Math.round((160 - y) / 10);
         val = Math.max(-10, Math.min(10, val));
-        allData[ds.value][times[i]] = val;
-        saveToLocal();
-        refresh();
+        saveScore(ds.value, times[i], val);
     }
 });
 
 ds.addEventListener("change", refresh);
-window.onload = refresh;
 </script>
-
 </body>
 </html>
