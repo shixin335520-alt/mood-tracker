@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>雲端同步心情溫度計</title>
+    <title>雲端同步心情溫度計 - 修復版</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <style>
@@ -11,7 +11,7 @@
         .container { max-width: 1200px; margin: 0 auto; }
         .card { background: #fff; padding: 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
         h2 { color: #2c3e50; border-left: 5px solid var(--primary); padding-left: 15px; }
-        canvas { width: 100%; background: #fff; border-radius: 8px; cursor: crosshair; border: 1px solid #eee; }
+        canvas { width: 100%; background: #fff; border-radius: 8px; cursor: crosshair; border: 1px solid #eee; display: block; }
         select { padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px; font-size: 16px; }
         .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; margin-top: 20px; }
         .note-box { background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #eee; }
@@ -37,11 +37,10 @@
 </div>
 
 <script>
-// --- 你的 Firebase 設定 ---
 const firebaseConfig = {
   apiKey: "AIzaSyBj3pvp-UrqNuFFqWQPD5OVoieuJI5DeoE",
   authDomain: "mood-81873.firebaseapp.com",
-  databaseURL: "https://mood-81873-default-rtdb.firebaseio.com", // 根據 ID 自動補齊的資料庫網址
+  databaseURL: "https://mood-81873-default-rtdb.firebaseio.com",
   projectId: "mood-81873",
   storageBucket: "mood-81873.firebasestorage.app",
   messagingSenderId: "888330529357",
@@ -49,7 +48,6 @@ const firebaseConfig = {
   measurementId: "G-JBSLK9DLWL"
 };
 
-// 初始化 Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
@@ -64,19 +62,17 @@ let allData = {}, noteData = {}, weekData = {};
 const ds = document.getElementById("dateSelect");
 const notesDiv = document.getElementById("notes");
 
-// 初始化介面
+// 1. 初始化資料結構與 UI
 dates.forEach(d => {
-    let o = document.createElement("option");
-    o.text = d; ds.add(o);
+    let o = document.createElement("option"); o.text = d; ds.add(o);
     allData[d] = {};
-
     let box = document.createElement("div");
     box.className = "note-box";
     box.innerHTML = `<span>${d}</span><textarea id="note-${d}" placeholder="今天的觀察..." oninput="saveNote('${d}', this.value)"></textarea>`;
     notesDiv.appendChild(box);
 });
 
-// 從 Firebase 監聽資料即時同步
+// 2. 監聽 Firebase 資料
 db.ref('moodData').on('value', (snapshot) => {
     const data = snapshot.val();
     if(data) {
@@ -123,7 +119,7 @@ function drawAxes(ctx, w, h, xGap, labels, type) {
     ctx.strokeStyle = "#e0e0e0";
     ctx.lineWidth = 1;
     for(let i = -10; i <= 10; i += 5) {
-        let y = h/2 - i*10;
+        let y = 160 - i * 10; // 修正坐標軸中心點
         ctx.beginPath(); ctx.moveTo(50, y); ctx.lineTo(w-10, y); ctx.stroke();
         ctx.fillStyle = "#999"; ctx.font = "12px Arial";
         ctx.fillText(i, 15, y+5);
@@ -169,10 +165,16 @@ function drawChart(id, data, labels, xGap, isWeek) {
     }
 }
 
-document.getElementById("dayChart").addEventListener("click", e => {
+// 監聽日版點擊
+document.getElementById("dayChart").addEventListener("mousedown", e => {
     let r = e.target.getBoundingClientRect();
-    let x = (e.clientX - r.left) * (e.target.width / r.width);
-    let y = (e.clientY - r.top) * (e.target.height / r.height);
+    // 考慮 Canvas 實際顯示比例
+    let scaleX = e.target.width / r.width;
+    let scaleY = e.target.height / r.height;
+    let x = (e.clientX - r.left) * scaleX;
+    let y = (e.clientY - r.top) * scaleY;
+
+    // 找到最接近的時間點
     let i = Math.round((x - 70) / 90);
     if (i >= 0 && i < times.length) {
         let val = Math.round((160 - y) / 10);
